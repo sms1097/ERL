@@ -13,9 +13,11 @@ class SLIPPER:
     def __process_rule(self, X, rule):
         """
         Takes rule in form
-        {feature: (["==", ">=", "<="], value, confidence)}
+        {feature: (["==", ">=", "<="], value), ... }
         and returns predictions
         """
+
+        for 
         return
 
     def C_R(self, temp_rule_dict, n):
@@ -30,6 +32,13 @@ class SLIPPER:
         """
         Compute objective funciton for grow rule routine and
         store W_plus and W_minus
+
+        grow_output:
+            {
+                'W_plus': float,
+                'W_minus': float,
+                'Z_tilda': float
+            }
         """
         grow_output = {}
         W_plus_idx = np.where(y_grow[output_idx] == 1)
@@ -43,20 +52,27 @@ class SLIPPER:
 
         return grow_output
 
-    def __make_candidate(self, X, y, A_c):
+    def __make_candidate(self, X, y, feat, A_c):
         """
-        Helper function to make a candidate rule based off 
+        Helper function to make a candidate rule based off
         a value
+
+        optimal_candidate:
+            {
+                'W_plus': float,
+                'W_minus': float,
+                'Z_tilda': float,
+                'operation': string
+            }
         """
-        # Get indices to build W_plus and W_minus
-        output_gte_idx = np.where(X[:, feat] >= A_c)[0]
-        output_lte_idx = np.where(X[:, feat] <= A_c)[0]
+        # # Get indices to build W_plus and W_minus
+        # output_gte_idx = np.where(X[:, feat] >= A_c)[0]
+        # output_lte_idx = np.where(X[:, feat] <= A_c)[0]
+        output_gte_idx = self.__process_rule(X, rule)
+        output_lte_idx = self.__process_rule(X, rule)
 
         output_lte = self.__grow_obj_calc(y, output_lte_idx)
         output_gte = self.__grow_obj_calc(y, output_gte_idx)
-
-        optimal_candidate = max(output_lte['Z_tilda'], 
-                                output_gte['Z_tilda'])
 
         optimal_candidate = output_lte \
             if output_lte['Z_tilda'] > output_gte['Z_tilda'] \
@@ -65,28 +81,31 @@ class SLIPPER:
         optimal_candidate['operation'] = '>=' \
             if optimal_candidate == output_gte['Z_tilda'] else '<='
 
-        candidate_rule =
+        return optimal_candidate
 
-        return optimal_candidate, 
-
-    def __update_candidate(self, candidate_rule, optimal_candidate, m):
+    def __update_candidate(self, curr_best, candidates, feat, m):
         """
-        Helper function to update and build candidate rule 
+        Helper function to update and build candidate rule
         if it improves Z_tilda
         """
-        new_candidate_rule = candidate_rule
 
-        if new_candidate_rule and optimal_candidate > best:
-            C_R = self.C_R(optimal_candidate, m)
+        # find best performing rule from batch
+        Zs = [x['Z_tilda'] for x in candidates]
+        candidate_dict = candidates[candidates.index(max(Zs))]
 
-            new_candidate_rule = (feat, operation, A_c, C_R)
+        # check if there is no current best
+        if not curr_best:
+            candidate_dict['feat'] = feat
+            return candidate_dict
 
-            z_delta = (self.Z - optimal_candidate) / self.Z \
-                if self.Z else z_delta
+        if candidate_dict['Z_tilda'] > curr_best['Z_tilda']:
+            candidate_dict['C_R'] = self.C_R(candidate_dict, m)
 
-            self.Z = best
+            self.Z = candidate_dict['Z_tilda']
+        else:
+            candidate_dict = None
 
-        return new_candidate_rule
+        return candidate_dict
 
     def __grow_rule(self, X, y, tol=0.01, con_tol=0.01):
         """
@@ -101,21 +120,28 @@ class SLIPPER:
         #            tuning condition for feature
         """
 
+        prev_rule, candidate_rule = None, None
         features = [i for i in range(X.shape[1])]
-        candidate_rule = None
-        z_delta = 100
         rule = []
 
-        # iterate while improvement is less than tolerance
-        while z_delta >= tol or not candidate_rule:
+        while prev_rule != candidate_rule:
             for feat in features:
-                for _ in range(3):  # TODO: loop based on con_tol
-                    candidates = np.percentile(X[:, feat], range(0, 100, 25),
-                                               interpolation='midpoint')
-                    for A_c in candidates:
-                        optimal_candidate = self.__make_candidate(X, y, A_c)
+                pivots = np.percentile(X[:, feat], range(0, 100, 10),
+                                       interpolation='midpoint')
+                feat_candidates = [
+                    self.__make_candidate(X, y, feat, A_c)
+                    for A_c in pivots
+                ]
 
-                        
+                candidate_rule = self.__update_candidate(
+                    candidate_rule,
+                    feat_candidates,
+                    feat,
+                    X.shape[0]
+                )
+
+            if candidate_rule:
+                rule.append(candidate_rule)
 
         return {}
 
@@ -136,8 +162,8 @@ class SLIPPER:
         self.D = np.array([1 / m for _ in range(m)])
         idx = np.array([i for i in range(m)])
 
-        for t in range(T):
-            X_grow, X_prune, y_grow, y_prune, grow_idx, prune_idx= \
+        for _ in range(T):
+            X_grow, X_prune, y_grow, y_prune, grow_idx, prune_idx = \
                 train_test_split(X, y, idx, test_size=0.33)
 
             # save actual idx of entry to update distributions
