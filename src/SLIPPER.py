@@ -1,4 +1,5 @@
 import copy
+from random import shuffle
 
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -6,12 +7,19 @@ from sklearn.model_selection import train_test_split
 
 class Rule:
     """
-    A rule calssifies an example based on conditions 
+    A rule calssifies an example based on conditions
     """
     def __init__(self):
         self.conditions = []
         self.Z_tilda = 0
         self.C_R = 0
+
+    def __str__(self):
+        output = ''
+        for condition in self.conditions:
+            output += str(condition) + '\n'
+
+        return output
 
     def add_condition(self, feature, operation, value):
         self.conditions.append(
@@ -22,7 +30,7 @@ class Rule:
 
     def predict(self, X, return_idx=False):
         """
-        Take conjunction of conditions and make 
+        Take conjunction of conditions and make
         prediction for rule
         """
         if len(self.conditions) < 1:
@@ -32,16 +40,19 @@ class Rule:
         positive_cases = set(range(X.shape[0]))
         for condition in self.conditions:
             outputs = set(list(condition.classify(X)))
-            positive_cases = positive_cases.intersection(outputs) 
+            positive_cases = positive_cases.intersection(outputs)
+
+        if return_idx:
+            return list(positive_cases)
 
         output = np.zeros(X.shape[0])
         output[list(positive_cases)] = 1
 
         return output
-    
+
     def grow_rule_obj(self, X, y, D):
         """
-        Score equation (6) and get confidence 
+        Score equation (6) and get confidence
         from equation (4)
         """
         preds = self.predict(X)
@@ -67,7 +78,8 @@ class Rule:
             self.value = value
 
         def __str__(self):
-            return str(self.feature) + ' ' + self.operation + ' ' + str(self.value)
+            return str(self.feature) + ' ' + self.operation + \
+                ' ' + str(self.value)
 
         def classify(self, X):
             """
@@ -90,7 +102,7 @@ class SLIPPER:
 
     def __make_candidate(self, X, y, curr_rule, feat, A_c):
         """
-        Make candidate rule based off new condition and 
+        Make candidate rule based off new condition and
         existing rule
         """
         # Get indices to build W_plus and W_minus
@@ -107,7 +119,7 @@ class SLIPPER:
 
         if optimal == gte_rule.Z_tilda:
             return gte_rule
-        else: 
+        else:
             return lte_rule
 
     def __grow_rule(self, X, y, tol=0.01, con_tol=0.01):
@@ -123,7 +135,7 @@ class SLIPPER:
         #            tuning condition for feature
         """
 
-        stop_condition = False 
+        stop_condition = False
         features = list(range(X.shape[1]))
         curr_rule = Rule()
 
@@ -149,9 +161,8 @@ class SLIPPER:
             preds = candidate_rule.predict(X)
             negative_coverage = np.where((preds == y) & (y == 0))
 
-            print(curr_rule.Z_tilda > candidate_rule.Z_tilda)
-            if curr_rule.Z_tilda > candidate_rule.Z_tilda or \
-                 len(negative_coverage) == 0:
+            if curr_rule.Z_tilda >= candidate_rule.Z_tilda \
+                or len(negative_coverage) == 0:
                 stop_condition = True
             else:
                 curr_rule = copy.deepcopy(candidate_rule)
@@ -163,7 +174,15 @@ class SLIPPER:
         Removes conditions from initial rule built on growth
         set minimizing objective formula
         """
-        return {}
+
+        candidate_rules = [
+            copy.deepcopy(rule).condtions.remove(condition)
+            for conditions in rule.conditions
+        ]
+
+
+       return prune_rule
+
 
     def fit(self, X, y, T=1):
         """
@@ -184,13 +203,24 @@ class SLIPPER:
             self.prune_idx = prune_idx
 
             rule_t = self.__grow_rule(X_grow, y_grow)
-            rule_t = self.__prune_rule(X_prune, y_prune, rule_t)
+            # rule_t = self.__prune_rule(X_prune, y_prune, rule_t)
+
+            print(rule_t.C_R)
 
             rules.append(rule_t)
 
-    def predict(self, X, y):
+    def predict(self, X):
         """
-        Function to return predictions given
-        learned rules
+        Find conjunction of all rules
         """
-        return
+
+        # sieve approach to gradually remove indices
+        positive_cases = set(range(X.shape[0]))
+        for rule in self.rules:
+            outputs = set(list(rule.predict(X)))
+            positive_cases = positive_cases.intersection(outputs)
+
+        preds = np.zeros(X.shape[0])
+        preds[list(positive_cases)] = 1
+
+        return preds
