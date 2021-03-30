@@ -1,5 +1,6 @@
 from src.SLIPPER import SLIPPER
 from sklearn.datasets import load_breast_cancer
+from sklearn.metrics import accuracy_score
 
 def main():
 
@@ -8,6 +9,9 @@ def main():
     clf = SLIPPER()
     clf.fit(X, y)
 
+    preds = clf.predict(X)
+
+    print(accuracy_score(y, preds))
 
 if __name__ == "__main__":
     main()
