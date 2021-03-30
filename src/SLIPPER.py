@@ -1,5 +1,6 @@
 import copy
-from random import shuffle
+import random 
+from enum import Enum
 
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -7,7 +8,7 @@ from sklearn.model_selection import train_test_split
 
 class SLIPPER:
     def __init__(self):
-        self.rules = {}
+        self.rules = []
         self.D = None
         self.Z = None
         self.grow_idx = None
@@ -93,21 +94,11 @@ class SLIPPER:
         curr_rule.prune_rule(X, y, self.D)
 
         while not stop_condition:
-            # candidate_rules = [
-            #     copy.deepcopy(curr_rule).prune_rule(
-            #         X, y, self.D, condition)
-            #     for condition in curr_rule.conditions
-            # ]
-
             candidate_rules = []
-            print(str(curr_rule))
-            print('-'*30)
             for condition in curr_rule.conditions:
-                print(condition)
                 R_prime = copy.deepcopy(curr_rule)
                 R_prime.prune_rule(X, y, self.D, condition)
                 candidate_rules.append(R_prime)
-
 
             prune_objs = [x.pobj for x in candidate_rules]
             best_prune = candidate_rules[
@@ -121,12 +112,40 @@ class SLIPPER:
 
         return curr_rule
 
-    def fit(self, X, y, T=1):
+    def make_default_rule(self, X, y):
+        """
+        Function to make default rule
+        """
+        default_rule = Rule()
+        features = random.choices(
+            list(range(X.shape[1])),
+            k=random.randint(2, X.shape[1])
+        )
+
+        for i, x in enumerate(features):
+            if i % 2:
+                default_rule.add_condition(
+                    x, "<=", max(X[:, x])
+                )
+            else:
+                default_rule.add_condition(
+                    x, ">=", min(X[:, x])
+                )
+        
+        return default_rule
+
+    def add_rule_or_default(self, X, y, learned_rule):
+        """
+        add rule or default
+        """
+        rules = [self.make_default_rule(X, y), learned_rule]
+        scores = [x.calc_eq_5(X, y, self.D) for x in rules]
+        self.rules.append(rules[scores.index(min(scores))])
+
+    def fit(self, X, y, T=10):
         """
         Main loop for training
         """
-
-        rules = []
         m = X.shape[0]
         self.D = np.array([1 / m for _ in range(m)])
         idx = np.array(list(range(m)))
@@ -142,23 +161,16 @@ class SLIPPER:
             rule_t = self.__grow_rule(X_grow, y_grow)
             rule_t = self.__prune_rule(X_prune, y_prune, rule_t)
 
-            print(rule_t.C_R)
-
-            rules.append(rule_t)
+            self.add_rule_or_default(X, y, rule_t)
 
     def predict(self, X):
         """
         Find conjunction of all rules
         """
 
-        # sieve approach to gradually remove indices
-        positive_cases = set(range(X.shape[0]))
+        preds = np.zeros(X.shape[0],)
         for rule in self.rules:
-            outputs = set(list(rule.predict(X)))
-            positive_cases = positive_cases.intersection(outputs)
-
-        preds = np.zeros(X.shape[0])
-        preds[list(positive_cases)] = 1
+            preds += rule.predict(X)
 
         return preds
 
@@ -172,7 +184,7 @@ class Rule:
         self.Z_tilda = 0
         self.pobj = 0  # prune rule objective value
         self.C_R = 0
-        self._pruned = False
+        self._pruned = False  # TODO: Replace with enum (grow, prune, default)
 
     def __str__(self):
         output = ''
@@ -216,7 +228,7 @@ class Rule:
         if return_idx:
             return list(positive_cases)
 
-        output = np.zeros(X.shape[0])
+        output = np.ones(X.shape[0]) * -1
         output[list(positive_cases)] = 1
 
         return output
@@ -257,6 +269,15 @@ class Rule:
         # TODO: This is really not safe to update C_R like this 
         # between two rules
         self.pobj = (1 - V_plus - V_minus) + V_plus * np.exp(-self.C_R) + V_minus * np.exp(self.C_R)
+
+    def calc_eq_5(self, X, y, D):
+        W_plus, W_minus = self.__get_design_matrices(X, y, D)
+        return 1 - np.square(np.sqrt(W_plus) - np.sqrt(W_minus))
+
+    class State(Enum):
+        GROW = 1
+        PRUNED = 2
+        DEFAULT = 3
 
     class Condition:
         """
