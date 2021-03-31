@@ -54,10 +54,10 @@ class SLIPPER:
         curr_rule = Rule()
 
         while not stop_condition:
-            candidate_rule = curr_rule
+            candidate_rule = copy.deepcopy(curr_rule)
             for feat in features:
                 # TODO: pivots should be actual search method
-                pivots = np.percentile(X[:, feat], range(0, 100, 25),
+                pivots = np.percentile(X[:, feat], range(0, 100, 5),
                                        interpolation='midpoint')
 
                 feature_candidates = [
@@ -122,7 +122,7 @@ class SLIPPER:
         default_rule = Rule(rule_state=RuleState.DEFAULT)
         features = random.choices(
             list(range(X.shape[1])),
-            k=random.randint(2, X.shape[1])
+            k=random.randint(2, 8)
         )
 
         for i, x in enumerate(features):
@@ -153,21 +153,16 @@ class SLIPPER:
 
         self.D /= np.sum(self.D)
 
-    def fit(self, X, y, T=5):
+    def fit(self, X, y, T=10):
         """
         Main loop for training
         """
         m = X.shape[0]
         self.D = np.array([1 / m for _ in range(m)])
-        idx = np.array(list(range(m)))
 
         for _ in range(T):
-            X_grow, X_prune, y_grow, y_prune, grow_idx, prune_idx = \
-                train_test_split(X, y, idx, test_size=0.33)
-
-            # save actual index of entry to update distributions
-            self.grow_idx = grow_idx
-            self.prune_idx = prune_idx
+            X_grow, X_prune, y_grow, y_prune = \
+                train_test_split(X, y, test_size=0.33)
 
             rule_t = self.__grow_rule(X_grow, y_grow)
             rule_t = self.__prune_rule(X_prune, y_prune, rule_t)
@@ -183,10 +178,9 @@ class SLIPPER:
 
         preds = np.zeros(X.shape[0],)
         for rule in self.rules:
-            preds += rule.predict(X)
+            preds += rule.predict(X) * rule.C_R
 
-        return preds
-
+        return preds > 0
 
 class RuleState(Enum):
     GROW = 1
@@ -248,13 +242,12 @@ class Rule:
         if return_idx:
             return list(positive_cases)
 
-        output = np.ones(X.shape[0]) 
-        if self.state in [RuleState.GROW, RuleState.PRUNE]:
-            output[list(positive_cases)] = 1
-        elif self.state == RuleState.DEFAULT:
-            output[list(positive_cases)] = -1
-        else:
-            raise Exception("Invalid Rule State")
+        # test to make sure default rule is building correct 
+        if self.state == RuleState.DEFAULT:
+            assert (positive_cases - set(range(X.shape[0]))) == set()
+
+        output = np.zeros(X.shape[0]) 
+        output[list(positive_cases)] = 1
 
         return output
 
