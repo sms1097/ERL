@@ -5,7 +5,6 @@ from enum import Enum
 import numpy as np
 from sklearn.model_selection import train_test_split
 
-
 class SLIPPER:
     def __init__(self):
         self.rules = []
@@ -95,6 +94,10 @@ class SLIPPER:
 
         while not stop_condition:
             candidate_rules = []
+
+            if len(curr_rule.conditions) == 1:
+                return curr_rule
+
             for condition in curr_rule.conditions:
                 R_prime = copy.deepcopy(curr_rule)
                 R_prime.prune_rule(X, y, self.D, condition)
@@ -116,7 +119,7 @@ class SLIPPER:
         """
         Function to make default rule
         """
-        default_rule = Rule()
+        default_rule = Rule(rule_state=RuleState.DEFAULT)
         features = random.choices(
             list(range(X.shape[1])),
             k=random.randint(2, X.shape[1])
@@ -142,7 +145,15 @@ class SLIPPER:
         scores = [x.calc_eq_5(X, y, self.D) for x in rules]
         self.rules.append(rules[scores.index(min(scores))])
 
-    def fit(self, X, y, T=10):
+    def update(self, X, y):
+        """
+        Function to update distributions
+        """
+        self.D /= np.exp(y * self.rules[-1].C_R)
+
+        self.D /= np.sum(self.D)
+
+    def fit(self, X, y, T=5):
         """
         Main loop for training
         """
@@ -163,6 +174,8 @@ class SLIPPER:
 
             self.add_rule_or_default(X, y, rule_t)
 
+            self.update(X, y)
+
     def predict(self, X):
         """
         Find conjunction of all rules
@@ -175,16 +188,22 @@ class SLIPPER:
         return preds
 
 
+class RuleState(Enum):
+    GROW = 1
+    PRUNE = 2
+    DEFAULT = 3
+
+
 class Rule:
     """
     A rule calssifies an example based on conditions
     """
-    def __init__(self):
+    def __init__(self, rule_state=RuleState.GROW):
         self.conditions = []
         self.Z_tilda = 0
         self.pobj = 0  # prune rule objective value
         self.C_R = 0
-        self._pruned = False  # TODO: Replace with enum (grow, prune, default)
+        self.state = rule_state
 
     def __str__(self):
         output = ''
@@ -197,6 +216,7 @@ class Rule:
         self.conditions.append(
             self.Condition(feature, operation, value)
         )
+
         # reset Z_tilda when adding new condition
         self.Z_tilda = None
 
@@ -207,7 +227,7 @@ class Rule:
         if condition:
             self.conditions.remove(condition)
 
-        self._pruned = True
+        self.state = RuleState.PRUNE
 
         self.prune_rule_obj(X, y, D)
 
@@ -228,8 +248,13 @@ class Rule:
         if return_idx:
             return list(positive_cases)
 
-        output = np.ones(X.shape[0]) * -1
-        output[list(positive_cases)] = 1
+        output = np.ones(X.shape[0]) 
+        if self.state in [RuleState.GROW, RuleState.PRUNE]:
+            output[list(positive_cases)] = 1
+        elif self.state == RuleState.DEFAULT:
+            output[list(positive_cases)] = -1
+        else:
+            raise Exception("Invalid Rule State")
 
         return output
 
@@ -273,11 +298,6 @@ class Rule:
     def calc_eq_5(self, X, y, D):
         W_plus, W_minus = self.__get_design_matrices(X, y, D)
         return 1 - np.square(np.sqrt(W_plus) - np.sqrt(W_minus))
-
-    class State(Enum):
-        GROW = 1
-        PRUNED = 2
-        DEFAULT = 3
 
     class Condition:
         """
