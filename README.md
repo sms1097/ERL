@@ -1,2 +1,2 @@
 # ERL
-Exact Rule Learning via Boolean Compressed Sensing and SLIPPER
+SLIPPER works right now mostly, still need to confirm some loose ends.
