@@ -1,6 +1,7 @@
 import copy
 import random 
 from enum import Enum
+from collections import Counter
 
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -22,19 +23,24 @@ class SLIPPER:
         # Get indices to build W_plus and W_minus
         gte_rule = copy.deepcopy(curr_rule)
         lte_rule = copy.deepcopy(curr_rule)
+        eq_rule = copy.deepcopy(curr_rule)
 
         gte_rule.add_condition(feat, '>=', A_c)
         lte_rule.add_condition(feat, '<=', A_c)
+        eq_rule.add_condition(feat, '==', A_c)
 
         gte_rule.grow_rule_obj(X, y, self.D)
         lte_rule.grow_rule_obj(X, y, self.D)
+        eq_rule.grow_rule_obj(X, y, self.D)
 
-        optimal = max(gte_rule.Z_tilda, lte_rule.Z_tilda)
+        optimal = max(eq_rule.Z_tilda, gte_rule.Z_tilda, lte_rule.Z_tilda)
 
         if optimal == gte_rule.Z_tilda:
             return gte_rule
-        else:
+        elif optimal == lte_rule.Z_tilda:
             return lte_rule
+        else:
+            return eq_rule
 
     def __grow_rule(self, X, y, tol=0.01, con_tol=0.01):
         """
@@ -122,7 +128,7 @@ class SLIPPER:
         default_rule = Rule(rule_state=RuleState.DEFAULT)
         features = random.choices(
             list(range(X.shape[1])),
-            k=random.randint(2, 8)
+            k=random.randint(2, 8)  # arbitrary choice for max conditions
         )
 
         for i, x in enumerate(features):
@@ -153,7 +159,14 @@ class SLIPPER:
 
         self.D /= np.sum(self.D)
 
-    def fit(self, X, y, T=10):
+    def collapse_rules(self):
+        """
+        Merge duplicate rules and update confidence
+        """
+        squashed_rules = []
+
+
+    def fit(self, X, y, T=50):
         """
         Main loop for training
         """
@@ -171,9 +184,11 @@ class SLIPPER:
 
             self.update(X, y)
 
+        self.collapse_rules()
+
     def predict(self, X):
         """
-        Find conjunction of all rules
+        DNF prediciton
         """
 
         preds = np.zeros(X.shape[0],)
@@ -181,6 +196,7 @@ class SLIPPER:
             preds += rule.predict(X) * rule.C_R
 
         return preds > 0
+
 
 class RuleState(Enum):
     GROW = 1
@@ -194,7 +210,7 @@ class Rule:
     """
     def __init__(self, rule_state=RuleState.GROW):
         self.conditions = []
-        self.Z_tilda = 0
+        self.Z_tilda = -10000
         self.pobj = 0  # prune rule objective value
         self.C_R = 0
         self.state = rule_state
