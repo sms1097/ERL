@@ -6,10 +6,11 @@ from collections import Counter
 import numpy as np
 from sklearn.model_selection import train_test_split
 
-class SLIPPER:
+from src.boosted_rules import BoostedRuleLearner, Rule, Condition
+
+class SLIPPER(BoostedRuleLearner):
     def __init__(self, features=None):
-        self.rules = []
-        self.D = None
+        super().__init__()
         self.Z = None
 
     def __make_candidate(self, X, y, curr_rule, feat, A_c):
@@ -55,7 +56,7 @@ class SLIPPER:
 
         stop_condition = False
         features = list(range(X.shape[1]))
-        curr_rule = Rule()
+        curr_rule = SlipperRule()
 
         while not stop_condition:
             candidate_rule = copy.deepcopy(curr_rule)
@@ -122,7 +123,7 @@ class SLIPPER:
         """
         Function to make default rule
         """
-        default_rule = Rule(rule_state=RuleState.DEFAULT)
+        default_rule = SlipperRule(rule_state=RuleState.DEFAULT)
         features = random.choices(
             list(range(X.shape[1])),
             k=random.randint(2, 8)  # arbitrary choice for max conditions
@@ -148,13 +149,6 @@ class SLIPPER:
         scores = [x.calc_eq_5(X, y, self.D) for x in rules]
         self.rules.append(rules[scores.index(min(scores))])
 
-    def update(self, X, y):
-        """
-        Function to update distributions
-        """
-        self.D /= np.exp(y * self.rules[-1].C_R)
-
-        self.D /= np.sum(self.D)
 
     def fit(self, X, y, T=5):
         """
@@ -174,16 +168,6 @@ class SLIPPER:
 
             self.update(X, y)
 
-    def predict(self, X):
-        """
-        DNF prediciton
-        """
-
-        preds = np.zeros(X.shape[0],)
-        for rule in self.rules:
-            preds += rule.predict(X) * rule.C_R
-
-        return preds > 0
 
 
 class RuleState(Enum):
@@ -192,31 +176,12 @@ class RuleState(Enum):
     DEFAULT = 3
 
 
-class Rule:
-    """
-    A rule calssifies an example based on conditions
-    """
+class SlipperRule(Rule):
     def __init__(self, rule_state=RuleState.GROW):
-        self.conditions = []
+        super().__init__()
         self.Z_tilda = -10000
         self.pobj = 0  # prune rule objective value
-        self.C_R = 0
         self.state = rule_state
-
-    def __str__(self):
-        output = ''
-        for condition in self.conditions:
-            output += str(condition) + '\n'
-
-        return output
-
-    def add_condition(self, feature, operation, value):
-        self.conditions.append(
-            Condition(feature, operation, value)
-        )
-
-        # reset Z_tilda when adding new condition
-        self.Z_tilda = None
 
     def prune_rule(self, X, y, D, condition=None):
         """
@@ -229,54 +194,12 @@ class Rule:
 
         self.prune_rule_obj(X, y, D)
 
-    def predict(self, X, return_idx=False):
-        """
-        Take conjunction of conditions and make
-        prediction for rule
-        """
-        if len(self.conditions) < 1:
-            raise Exception("No conditions for rule, add conditions!")
-
-        # sieve approach to gradually remove indices
-        positive_cases = set(range(X.shape[0]))
-        for condition in self.conditions:
-            outputs = set(list(condition.classify(X)))
-            positive_cases = positive_cases.intersection(outputs)
-
-        if return_idx:
-            return list(positive_cases)
-
-        # test to make sure default rule is building correct 
-        if self.state == RuleState.DEFAULT:
-            assert (positive_cases - set(range(X.shape[0]))) == set()
-
-        output = np.zeros(X.shape[0]) 
-        output[list(positive_cases)] = 1
-
-        return output
-
-    def __get_design_matrices(self, X, y, D):
-        """
-        Helper funtion to calculate Ws for grow rule
-        and Vs for prune rule
-        """
-        preds = self.predict(X)
-
-        W_plus_idx = np.where((preds == 1) & (y == 1))
-        W_minus_idx = np.where((preds == 1) & (y == 0))
-
-        return np.sum(D[W_plus_idx]), np.sum(D[W_minus_idx])
-
-    def calc_C_R(self, plus, minus, D):
-        self.C_R = 0.5 * np.log((plus + (1 / (2 * len(D)))) \
-            / (minus + 1 / (2 * len(D))))
-
     def grow_rule_obj(self, X, y, D):
         """
         Score equation (6) and get confidence
         from equation (4)
         """
-        W_plus, W_minus = self.__get_design_matrices(X, y, D)
+        W_plus, W_minus = self._get_design_matrices(X, y, D)
 
         self.calc_C_R(W_plus, W_minus, D)
 
@@ -286,40 +209,13 @@ class Rule:
         """
         Objective function for prune rule routine
         """
-        V_plus, V_minus = self.__get_design_matrices(X, y, D)
+        V_plus, V_minus = self._get_design_matrices(X, y, D)
 
         # TODO: This is really not safe to update C_R like this 
         # between two rules
         self.pobj = (1 - V_plus - V_minus) + V_plus * np.exp(-self.C_R) + V_minus * np.exp(self.C_R)
 
     def calc_eq_5(self, X, y, D):
-        W_plus, W_minus = self.__get_design_matrices(X, y, D)
+        W_plus, W_minus = self._get_design_matrices(X, y, D)
         return 1 - np.square(np.sqrt(W_plus) - np.sqrt(W_minus))
 
-class Condition:
-    """
-    Models conditions for a feature that make up a rule
-    """
-    def __init__(self, feature, operation, value):
-        self.feature = feature
-        self.operation = operation
-        self.value = value
-
-    def __str__(self):
-        return str(self.feature) + ' ' + self.operation + \
-            ' ' + str(self.value)
-
-    def __eq__(self, other):
-        return self.feature == other.feature and \
-            self.operation == other.operation and \
-                self.value == other.value
-
-    def classify(self, X):
-        """
-        Apply condition and return indices where condition
-        is satisifed
-        """
-        logic = 'X[:, self.feature] {} self.value'.format(self.operation)
-        output = np.where(eval(logic))
-
-        return output[0]

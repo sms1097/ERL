@@ -1,11 +1,11 @@
-from src.SLIPPER import SLIPPER
+# from src.SLIPPER import SLIPPER
+from src.ERL import ERL
 import numpy as np
 import pandas as pd
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
-from sklearn.datasets import load_breast_cancer
 
 def base_load(management, discount, spatial=False):
 
@@ -17,8 +17,8 @@ def base_load(management, discount, spatial=False):
     data = pd.read_csv("data.csv")
 
     salvage = data[
-        (data['TimeStep'] == 40) & 
-        (data['Treatment'] == management) & 
+        (data['TimeStep'] == 40) &
+        (data['Treatment'] == management) &
         (data['Salvage'] == 'Salvage')
     ]
 
@@ -26,8 +26,8 @@ def base_load(management, discount, spatial=False):
     salvage = salvage.fillna(salvage.mean())
 
     no_salvage = data[
-        (data['TimeStep'] == 40) & 
-        (data['Treatment'] == management) & 
+        (data['TimeStep'] == 40) &
+        (data['Treatment'] == management) &
         (data['Salvage'] == 'NoSalvage')
     ]
 
@@ -54,16 +54,18 @@ def load_data_class(management, discount="DR5", spatial=False):
 
 def main():
     data = load_data_class('Light', 'DR5')
-    
-    X = data.drop(['Voucher', 'Treatment', 'DR5', 'SiteInd', 'Salvage', 'TimeStep'], axis=1)
+
+    X = data.drop(['Voucher', 'Treatment', 'DR5', 'SiteInd', 'Salvage',
+                   'TimeStep'], axis=1)
     y = data['Voucher']
     # X, y = load_breast_cancer(return_X_y=True)
 
     X, y = X.to_numpy(), y.to_numpy()
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2,
+                                                        random_state=1)
 
-    clf = SLIPPER()
+    clf = ERL()
     clf.fit(X_train, y_train)
 
     preds = clf.predict(X_test)
@@ -73,6 +75,8 @@ def main():
     print(np.unique(y_test, return_counts=True))
     print(np.unique(preds, return_counts=True))
 
+    for rule in clf.rules:
+        print(rule)
 
 if __name__ == "__main__":
     main()
