@@ -1,12 +1,12 @@
 import copy
-import random 
+import random
 from enum import Enum
-from collections import Counter
 
 import numpy as np
 from sklearn.model_selection import train_test_split
 
-from src.boosted_rules import BoostedRuleLearner, Rule, Condition
+from src.boosted_rules import BoostedRuleLearner, Rule
+
 
 class SLIPPER(BoostedRuleLearner):
     def __init__(self, features=None):
@@ -79,7 +79,8 @@ class SLIPPER(BoostedRuleLearner):
             preds = candidate_rule.predict(X)
             negative_coverage = np.where((preds == y) & (y == 0))
 
-            if curr_rule.Z_tilda >= candidate_rule.Z_tilda or len(negative_coverage) == 0:
+            if curr_rule.Z_tilda >= candidate_rule.Z_tilda or \
+                    len(negative_coverage) == 0:
                 stop_condition = True
             else:
                 curr_rule = copy.deepcopy(candidate_rule)
@@ -138,7 +139,7 @@ class SLIPPER(BoostedRuleLearner):
                 default_rule.add_condition(
                     x, ">=", min(X[:, x])
                 )
-        
+
         return default_rule
 
     def add_rule_or_default(self, X, y, learned_rule):
@@ -149,6 +150,13 @@ class SLIPPER(BoostedRuleLearner):
         scores = [x.calc_eq_5(X, y, self.D) for x in rules]
         self.rules.append(rules[scores.index(min(scores))])
 
+    def update(self, X, y):
+        """
+        Function to update distributions
+        """
+        self.D /= np.exp(y * self.rules[-1].C_R)
+
+        self.D /= np.sum(self.D)
 
     def fit(self, X, y, T=5):
         """
@@ -167,7 +175,6 @@ class SLIPPER(BoostedRuleLearner):
             self.add_rule_or_default(X, y, rule_t)
 
             self.update(X, y)
-
 
 
 class RuleState(Enum):
@@ -211,11 +218,11 @@ class SlipperRule(Rule):
         """
         V_plus, V_minus = self._get_design_matrices(X, y, D)
 
-        # TODO: This is really not safe to update C_R like this 
+        # TODO: This is really not safe to update C_R like this
         # between two rules
-        self.pobj = (1 - V_plus - V_minus) + V_plus * np.exp(-self.C_R) + V_minus * np.exp(self.C_R)
+        self.pobj = (1 - V_plus - V_minus) + V_plus * np.exp(-self.C_R) \
+            + V_minus * np.exp(self.C_R)
 
     def calc_eq_5(self, X, y, D):
         W_plus, W_minus = self._get_design_matrices(X, y, D)
         return 1 - np.square(np.sqrt(W_plus) - np.sqrt(W_minus))
-

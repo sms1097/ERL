@@ -26,7 +26,6 @@ class ERL(BoostedRuleLearner):
                     self.conditions.append(condition)
 
         measurement = np.vstack(preds)
-        print(measurement.shape)
         return measurement.T
 
     def _make_LP(self, measurement, y):
@@ -34,8 +33,8 @@ class ERL(BoostedRuleLearner):
         Run LP from ERL
         """
         # make measurement matrics
-        A_p = measurement[np.where(y != 1)].astype(int)
-        A_n = measurement[np.where(y == 1)].astype(int)
+        A_p = measurement[np.where(y == 1)].astype(int)
+        A_n = measurement[np.where(y != 1)].astype(int)
 
         # define model and other paramters
         m = gp.Model('rule-extraciton')
@@ -71,6 +70,10 @@ class ERL(BoostedRuleLearner):
 
         return w_out
 
+    def update(self, y_hat, y):
+        self.D /= np.exp((2 * y - 1) * y_hat)
+        self.D /= np.sum(self.D)
+
     def fit(self, X, y, T=5):
         """
         Fit ERL model
@@ -94,8 +97,10 @@ class ERL(BoostedRuleLearner):
             if np.square(np.sqrt(s_tp) - np.sqrt(s_fp)) \
                     > np.square(np.sqrt(s_t) - np.sqrt(s_f)):
                 rule.calc_C_R(s_tp, s_fp, self.D)
+                y_hat = rule.C_R * rule.predict(X)
             else:
                 rule.calc_C_R(s_t, s_f, self.D)
+                y_hat = rule.C_R
 
             self.rules.append(rule)
-            self.update(X, y)
+            self.update(y_hat, y)

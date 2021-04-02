@@ -78,5 +78,6 @@ def main():
     for rule in clf.rules:
         print(rule)
 
+
 if __name__ == "__main__":
     main()

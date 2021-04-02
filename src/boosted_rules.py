@@ -17,14 +17,6 @@ class BoostedRuleLearner:
 
         return preds > 0
 
-    def update(self, X, y):
-        """
-        Function to update distributions
-        """
-        self.D /= np.exp(y * self.rules[-1].C_R)
-
-        self.D /= np.sum(self.D)
-
 
 class Rule:
     """
