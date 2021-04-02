@@ -7,7 +7,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 
 class SLIPPER:
-    def __init__(self):
+    def __init__(self, features=None):
         self.rules = []
         self.D = None
         self.Z = None
@@ -62,8 +62,7 @@ class SLIPPER:
         while not stop_condition:
             candidate_rule = copy.deepcopy(curr_rule)
             for feat in features:
-                # TODO: pivots should be actual search method
-                pivots = np.percentile(X[:, feat], range(0, 100, 5),
+                pivots = np.percentile(X[:, feat], range(0, 100, 10),
                                        interpolation='midpoint')
 
                 feature_candidates = [
@@ -159,14 +158,7 @@ class SLIPPER:
 
         self.D /= np.sum(self.D)
 
-    def collapse_rules(self):
-        """
-        Merge duplicate rules and update confidence
-        """
-        squashed_rules = []
-
-
-    def fit(self, X, y, T=50):
+    def fit(self, X, y, T=5):
         """
         Main loop for training
         """
@@ -183,8 +175,6 @@ class SLIPPER:
             self.add_rule_or_default(X, y, rule_t)
 
             self.update(X, y)
-
-        self.collapse_rules()
 
     def predict(self, X):
         """

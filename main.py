@@ -53,15 +53,15 @@ def load_data_class(management, discount="DR5", spatial=False):
 
 
 def main():
-    # data = load_data_class('Comm-Ind', 'DR1')
+    data = load_data_class('Light', 'DR5')
     
-    # X = data.drop(['Voucher', 'Treatment', 'DR1', 'SiteInd', 'Salvage', 'TimeStep'], axis=1)
-    # y = data['Voucher']
-    X, y = load_breast_cancer(return_X_y=True)
+    X = data.drop(['Voucher', 'Treatment', 'DR5', 'SiteInd', 'Salvage', 'TimeStep'], axis=1)
+    y = data['Voucher']
+    # X, y = load_breast_cancer(return_X_y=True)
 
-    # X, y = X.to_numpy(), y.to_numpy()
+    X, y = X.to_numpy(), y.to_numpy()
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1)
 
     clf = SLIPPER()
     clf.fit(X_train, y_train)
