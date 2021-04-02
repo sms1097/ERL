@@ -11,8 +11,6 @@ class SLIPPER:
         self.rules = []
         self.D = None
         self.Z = None
-        self.grow_idx = None
-        self.prune_idx = None
 
     def __make_candidate(self, X, y, curr_rule, feat, A_c):
         """
@@ -214,7 +212,7 @@ class Rule:
 
     def add_condition(self, feature, operation, value):
         self.conditions.append(
-            self.Condition(feature, operation, value)
+            Condition(feature, operation, value)
         )
 
         # reset Z_tilda when adding new condition
@@ -298,30 +296,30 @@ class Rule:
         W_plus, W_minus = self.__get_design_matrices(X, y, D)
         return 1 - np.square(np.sqrt(W_plus) - np.sqrt(W_minus))
 
-    class Condition:
+class Condition:
+    """
+    Models conditions for a feature that make up a rule
+    """
+    def __init__(self, feature, operation, value):
+        self.feature = feature
+        self.operation = operation
+        self.value = value
+
+    def __str__(self):
+        return str(self.feature) + ' ' + self.operation + \
+            ' ' + str(self.value)
+
+    def __eq__(self, other):
+        return self.feature == other.feature and \
+            self.operation == other.operation and \
+                self.value == other.value
+
+    def classify(self, X):
         """
-        Models conditions for a feature that make up a rule
+        Apply condition and return indices where condition
+        is satisifed
         """
-        def __init__(self, feature, operation, value):
-            self.feature = feature
-            self.operation = operation
-            self.value = value
+        logic = 'X[:, self.feature] {} self.value'.format(self.operation)
+        output = np.where(eval(logic))
 
-        def __str__(self):
-            return str(self.feature) + ' ' + self.operation + \
-                ' ' + str(self.value)
-
-        def __eq__(self, other):
-            return self.feature == other.feature and \
-                self.operation == other.operation and \
-                    self.value == other.value
-
-        def classify(self, X):
-            """
-            Apply condition and return indices where condition
-            is satisifed
-            """
-            logic = 'X[:, self.feature] {} self.value'.format(self.operation)
-            output = np.where(eval(logic))
-
-            return output[0]
+        return output[0]
