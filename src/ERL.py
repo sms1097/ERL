@@ -28,19 +28,25 @@ class ERL(BoostedRuleLearner):
         measurement = np.vstack(preds)
         return measurement.T
 
-    def _make_LP(self, measurement, y):
+    def _make_LP(self, measurement, y, C=1000):
         """
-        Run LP from ERL
+        Make LP with distributions and emissions
         """
         # make measurement matrics
-        A_p = measurement[np.where(y == 1)].astype(int)
-        A_n = measurement[np.where(y != 1)].astype(int)
+        positive_idx, negative_idx = np.where(y == 1), np.where(y != 1)
+        A_p = measurement[positive_idx].astype(int)
+        A_n = measurement[negative_idx].astype(int)
+
+        D_positive = self.D[positive_idx]
+        D_negative = self.D[negative_idx]
 
         # define model and other paramters
         m = gp.Model('rule-extraciton')
         w = m.addMVar(shape=measurement.shape[1], name="weights")
         psi_p = m.addMVar(shape=A_p.shape[0], name="psi_p")
         psi_n = m.addMVar(shape=A_n.shape[0], name="psi_n")
+        D_p = m.addVar(D_positive, name="D_p")
+        D_n = m.addVar(D_negative, name="D_n")
 
         # add model constraints
         m.addConstr(w <= 1.0)
@@ -52,7 +58,8 @@ class ERL(BoostedRuleLearner):
         m.addConstr(A_n @ w == psi_n)
         m.update()
 
-        m.setObjective(sum(w) + 1000 * (sum(psi_p) + sum(psi_n)), GRB.MINIMIZE)
+        m.setObjective(sum(w) + C * (sum(psi_p * D_p) + sum(psi_n * D_n)),
+                       GRB.MINIMIZE)
 
         self.LP = m
 
@@ -65,12 +72,15 @@ class ERL(BoostedRuleLearner):
 
         for i in range(self.percentiles * p):
             w = int(self.LP.getVarByName('weights[{}]'.format(i)).x)
-            if w == 1:
+            if w > 1:
                 w_out.append(w)
 
         return w_out
 
     def update(self, y_hat, y):
+        """
+        update distributions according to algorithm 1
+        """
         self.D /= np.exp((2 * y - 1) * y_hat)
         self.D /= np.sum(self.D)
 
@@ -79,13 +89,14 @@ class ERL(BoostedRuleLearner):
         Fit ERL model
         """
         # initialize problem
-        M = self._make_measurement_matrix(X, y)
-        self._make_LP(M, y)
         m = X.shape[0]
+        M = self._make_measurement_matrix(X, y)
         self.D = np.array([1 / m for _ in range(m)])
 
         for _ in range(T):
+            self._make_LP(M, y)
             w = self._run_LP(X.shape[1])
+
             rule = Rule()
             for feat in w:
                 rule.conditions.append(self.conditions[feat])
