@@ -1,6 +1,6 @@
 import numpy as np
 import gurobipy as gp
-from gurobipy import GRB
+from gurobipy import GRB, quicksum
 from src.boosted_rules import BoostedRuleLearner, Rule, Condition
 
 
@@ -37,16 +37,14 @@ class ERL(BoostedRuleLearner):
         A_p = measurement[positive_idx].astype(int)
         A_n = measurement[negative_idx].astype(int)
 
-        D_positive = self.D[positive_idx]
-        D_negative = self.D[negative_idx]
+        D_p = self.D[positive_idx]
+        D_n = self.D[negative_idx]
 
         # define model and other paramters
         m = gp.Model('rule-extraciton')
         w = m.addMVar(shape=measurement.shape[1], name="weights")
-        psi_p = m.addMVar(shape=A_p.shape[0], name="psi_p")
-        psi_n = m.addMVar(shape=A_n.shape[0], name="psi_n")
-        D_p = m.addVar(D_positive, name="D_p")
-        D_n = m.addVar(D_negative, name="D_n")
+        psi_p = m.addMVar(shape=D_p.shape, name="psi_p")
+        psi_n = m.addMVar(shape=D_n.shape, name="psi_n")
 
         # add model constraints
         m.addConstr(w <= 1.0)
@@ -58,8 +56,10 @@ class ERL(BoostedRuleLearner):
         m.addConstr(A_n @ w == psi_n)
         m.update()
 
-        m.setObjective(sum(w) + C * (sum(psi_p * D_p) + sum(psi_n * D_n)),
-                       GRB.MINIMIZE)
+        m.setObjective(
+            sum(w) + C * (sum(D_p * psi_p) + sum(D_n * psi_n)),
+            GRB.MINIMIZE
+        )
 
         self.LP = m
 
@@ -105,6 +105,7 @@ class ERL(BoostedRuleLearner):
             s_t = np.sum(self.D[np.where(y == 1)])
             s_f = np.sum(self.D[np.where(y == 0)])
 
+            # update procedure from Algorithm 1
             if np.square(np.sqrt(s_tp) - np.sqrt(s_fp)) \
                     > np.square(np.sqrt(s_t) - np.sqrt(s_f)):
                 rule.calc_C_R(s_tp, s_fp, self.D)
