@@ -43,8 +43,8 @@ class ERL(BoostedRuleLearner):
         # define model and other paramters
         m = gp.Model('rule-extraciton')
         w = m.addMVar(shape=measurement.shape[1], name="weights")
-        psi_p = m.addMVar(shape=D_p.shape, name="psi_p")
-        psi_n = m.addMVar(shape=D_n.shape, name="psi_n")
+        psi_p = m.addVars(D_p.shape[0], name="psi_p")
+        psi_n = m.addVars(D_n.shape[0], name="psi_n")
 
         # add model constraints
         m.addConstr(w <= 1.0)
@@ -57,7 +57,8 @@ class ERL(BoostedRuleLearner):
         m.update()
 
         m.setObjective(
-            sum(w) + C * (sum(D_p * psi_p) + sum(D_n * psi_n)),
+            # sum(w) + C * (D_p[:, 0] @ psi_p[:, 0] + D_n[:, 0] @ psi_n[:, 0]),
+            quicksum(w) + C * (sum(D_p[i] * psi_p[i] for i in range(D_p.shape[0]))),
             GRB.MINIMIZE
         )
 
