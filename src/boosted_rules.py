@@ -33,9 +33,9 @@ class Rule:
 
         return output
 
-    def add_condition(self, feature, operation, value):
+    def add_condition(self, feature, operation, value, feature_map):
         self.conditions.append(
-            Condition(feature, operation, value)
+            Condition(feature, operation, value, feature_map)
         )
 
         # reset Z_tilda when adding new condition
@@ -84,14 +84,20 @@ class Condition:
     """
     Models conditions for a feature that make up a rule
     """
-    def __init__(self, feature, operation, value):
+    def __init__(self, feature, operation, value, feature_map=None):
         self.feature = feature
         self.operation = operation
         self.value = value
+        self.feature_map = feature_map
 
     def __str__(self):
-        return str(self.feature) + ' ' + self.operation + \
-            ' ' + str(self.value)
+        out = ''
+        if self.feature_map:
+            out += self.feature_map[self.feature]
+        else:
+            out += str(self.feature)
+
+        return out + ' ' + self.operation + ' ' + str(self.value)
 
     def __eq__(self, other):
         return self.feature == other.feature and \

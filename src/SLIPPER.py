@@ -12,6 +12,10 @@ class SLIPPER(BoostedRuleLearner):
     def __init__(self, features=None):
         super().__init__()
         self.Z = None
+        if features is not None:
+            self.feature_map = {i: feat for i, feat in enumerate(features)}
+        else:
+            self.feature_map = None
 
     def __make_candidate(self, X, y, curr_rule, feat, A_c):
         """
@@ -24,9 +28,9 @@ class SLIPPER(BoostedRuleLearner):
         lte_rule = copy.deepcopy(curr_rule)
         eq_rule = copy.deepcopy(curr_rule)
 
-        gte_rule.add_condition(feat, '>=', A_c)
-        lte_rule.add_condition(feat, '<=', A_c)
-        eq_rule.add_condition(feat, '==', A_c)
+        gte_rule.add_condition(feat, '>=', A_c, self.feature_map)
+        lte_rule.add_condition(feat, '<=', A_c, self.feature_map)
+        eq_rule.add_condition(feat, '==', A_c, self.feature_map)
 
         gte_rule.grow_rule_obj(X, y, self.D)
         lte_rule.grow_rule_obj(X, y, self.D)
@@ -133,11 +137,11 @@ class SLIPPER(BoostedRuleLearner):
         for i, x in enumerate(features):
             if i % 2:
                 default_rule.add_condition(
-                    x, "<=", max(X[:, x])
+                    x, "<=", max(X[:, x]), self.feature_map
                 )
             else:
                 default_rule.add_condition(
-                    x, ">=", min(X[:, x])
+                    x, ">=", min(X[:, x]), self.feature_map
                 )
 
         return default_rule
@@ -158,7 +162,7 @@ class SLIPPER(BoostedRuleLearner):
 
         self.D /= np.sum(self.D)
 
-    def fit(self, X, y, T=5):
+    def fit(self, X, y, T=3):
         """
         Main loop for training
         """
@@ -189,6 +193,13 @@ class SlipperRule(Rule):
         self.Z_tilda = -10000
         self.pobj = 0  # prune rule objective value
         self.state = rule_state
+
+    def __str__(self):
+        output = str(self.state) + '\n'
+        for condition in self.conditions:
+            output += str(condition) + '\n'
+
+        return output
 
     def prune_rule(self, X, y, D, condition=None):
         """
