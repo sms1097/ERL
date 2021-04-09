@@ -107,15 +107,14 @@ def main():
     X_train, X_test, y_train, y_test, _, test_index = train_test_split(
         X, y, index, test_size=0.2, random_state=1)
 
-    _, _, ep_idx, y_no_salvage = train_test_split(
+    _, _, E_p, y_no_salvage = train_test_split(
         X, no_salvage[DISCOUNT], test_size=0.2, random_state=1)
 
-    _, _, en_idx, y_salvage = train_test_split(
+    _, _, E_n, y_salvage = train_test_split(
         X, salvage[DISCOUNT], test_size=0.2, random_state=1)
 
-    E_p = no_salvage.iloc[ep_idx, :].to_numpy()
-    E_n = salvage.iloc[en_idx, :].to_numpy()
-
+    # E_p = no_salvage[DISCOUNT].iloc[ep_idx, :].to_numpy()
+    # E_n = salvage[DISCOUNT].iloc[en_idx, :].to_numpy()
     clf = ERL()
     clf.fit(X_train, y_train, E_p, E_n)
 

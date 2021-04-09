@@ -38,8 +38,8 @@ class ERL(BoostedRuleLearner):
         A_p = measurement[positive_idx].astype(int)
         A_n = measurement[negative_idx].astype(int)
 
-        E_p = emissions_positive[positive_idx].T
-        E_n = emissions_negative[negative_idx].T
+        E_p = emissions_positive.T
+        E_n = emissions_negative.T
 
         D_p = self.D[positive_idx]
         D_n = self.D[negative_idx]
@@ -63,8 +63,8 @@ class ERL(BoostedRuleLearner):
         m.update()
 
         m.setObjective(
-            one @ w + E_p @ (A_p @ w) + E_n @ (A_p @ w) + C * (D_p @ psi_p +
-                                                               D_n @ psi_n),
+            one @ w + E_p @ A_p @ w + E_n @ A_p @ w + C * (D_p @ psi_p +
+                                                           D_n @ psi_n),
             GRB.MINIMIZE
         )
 
@@ -101,6 +101,7 @@ class ERL(BoostedRuleLearner):
         self.D = np.array([1 / m for _ in range(m)])
 
         for _ in range(T):
+            print(y.shape)
             self._make_LP(M, y, emissions_positive, emissions_negative)
             w = self._run_LP(X.shape[1])
 
