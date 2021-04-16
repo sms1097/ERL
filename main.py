@@ -96,10 +96,17 @@ def main():
     data, salvage, no_salvage = load_data_class(all_data, MANAGEMENT,
                                                 DISCOUNT)
 
+    # emissions = [salvage[DISCOUNT], no_salvage[DISCOUNT]]
+    # headers = ['salvage', 'no_salvage']
+    # optimal_df = pd.concat(emissions, axis=1, keys=headers)
+    # optimal_df['positive'] = optimal_df[['salvage', 'no_salvage']].min(axis=1)
+    # optimal_df['negative'] = optimal_df[['salvage', 'no_salvage']].max(axis=1)
+
     X = data.drop(['Voucher', 'Treatment', DISCOUNT, 'diff', 'SiteInd',
                    'Salvage', 'TimeStep'], axis=1)
     y = data['Voucher']
 
+    print(X.columns.tolist()[1])
     # features = X.columns
     index = y.index.to_list()
 
@@ -108,13 +115,13 @@ def main():
         X, y, index, test_size=0.2, random_state=1)
 
     _, _, E_p, y_no_salvage = train_test_split(
-        X, no_salvage[DISCOUNT], test_size=0.2, random_state=1)
-
-    _, _, E_n, y_salvage = train_test_split(
         X, salvage[DISCOUNT], test_size=0.2, random_state=1)
 
-    # E_p = no_salvage[DISCOUNT].iloc[ep_idx, :].to_numpy()
-    # E_n = salvage[DISCOUNT].iloc[en_idx, :].to_numpy()
+    _, _, E_n, y_salvage = train_test_split(
+        X, no_salvage[DISCOUNT], test_size=0.2, random_state=1)
+
+    E_p, E_n = E_p.to_numpy(), E_n.to_numpy()
+
     clf = ERL()
     clf.fit(X_train, y_train, E_p, E_n)
 

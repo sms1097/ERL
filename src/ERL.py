@@ -38,8 +38,10 @@ class ERL(BoostedRuleLearner):
         A_p = measurement[positive_idx].astype(int)
         A_n = measurement[negative_idx].astype(int)
 
-        E_p = emissions_positive.T
-        E_n = emissions_negative.T
+        E_p = emissions_positive[positive_idx]
+        E_n = emissions_negative[negative_idx]
+
+        E_p, E_n = np.expand_dims(E_p, axis=1).T, np.expand_dims(E_n, axis=1).T
 
         D_p = self.D[positive_idx]
         D_n = self.D[negative_idx]
@@ -47,6 +49,10 @@ class ERL(BoostedRuleLearner):
         # define model and other paramters
         m = gp.Model('rule-extraciton')
         w = m.addMVar(shape=measurement.shape[1], name="weights")
+
+        t_p = m.addMVar(shape=A_p.shape[0], name="t_p")
+        t_n = m.addMVar(shape=A_n.shape[0], name="t_n")
+
         one = np.ones(w.shape[0])
 
         psi_p = m.addMVar(shape=D_p.shape[0], name="psi_p")
@@ -60,11 +66,14 @@ class ERL(BoostedRuleLearner):
         m.addConstr(psi_n >= 0)
         m.addConstr(A_p @ w + psi_p >= 1.0)
         m.addConstr(A_n @ w == psi_n)
+        m.addConstr(t_p >= 1 / 300 * A_p @ w)
+        m.addConstr(t_n >= 1 / 300 * A_n @ w)
         m.update()
 
         m.setObjective(
-            one @ w + E_p @ A_p @ w + E_n @ A_p @ w + C * (D_p @ psi_p +
-                                                           D_n @ psi_n),
+            one @ w +  # 0.00001 * ((E_p @ A_p @ w) + (E_n @ A_n @ w)),
+            E_p @ t_p + E_n @ t_n +
+            C * (D_p @ psi_p + D_n @ psi_n),
             GRB.MINIMIZE
         )
 
@@ -78,6 +87,7 @@ class ERL(BoostedRuleLearner):
         w_out = []
 
         for i in range(self.percentiles * p):
+            print(self.LP.getVarByName('weights[0]'))
             w = int(self.LP.getVarByName('weights[{}]'.format(i)).x)
             if w > 0:
                 w_out.append(i)
@@ -91,7 +101,7 @@ class ERL(BoostedRuleLearner):
         self.D /= np.exp((2 * y - 1) * y_hat)
         self.D /= np.sum(self.D)
 
-    def fit(self, X, y, emissions_positive, emissions_negative, T=1):
+    def fit(self, X, y, emissions_positive, emissions_negative, T=3):
         """
         Fit ERL model
         """
@@ -101,7 +111,6 @@ class ERL(BoostedRuleLearner):
         self.D = np.array([1 / m for _ in range(m)])
 
         for _ in range(T):
-            print(y.shape)
             self._make_LP(M, y, emissions_positive, emissions_negative)
             w = self._run_LP(X.shape[1])
 
