@@ -38,10 +38,10 @@ class ERL(BoostedRuleLearner):
         A_p = measurement[positive_idx].astype(int)
         A_n = measurement[negative_idx].astype(int)
 
-        E_p = emissions_positive[positive_idx]
-        E_n = emissions_negative[negative_idx]
+        # E_p = emissions_positive[positive_idx]
+        # E_n = emissions_negative[negative_idx]
 
-        E_p, E_n = np.expand_dims(E_p, axis=1).T, np.expand_dims(E_n, axis=1).T
+        # E_p, E_n = np.expand_dims(E_p, axis=1).T, np.expand_dims(E_n, axis=1).T
 
         D_p = self.D[positive_idx]
         D_n = self.D[negative_idx]
@@ -50,8 +50,8 @@ class ERL(BoostedRuleLearner):
         m = gp.Model('rule-extraciton')
         w = m.addMVar(shape=measurement.shape[1], name="weights")
 
-        t_p = m.addMVar(shape=A_p.shape[0], name="t_p")
-        t_n = m.addMVar(shape=A_n.shape[0], name="t_n")
+        # t_p = m.addMVar(shape=A_p.shape[0], name="t_p", vtype=GRB.BINARY)
+        # t_n = m.addMVar(shape=A_n.shape[0], name="t_n", vtype=GRB.BINARY)
 
         one = np.ones(w.shape[0])
 
@@ -64,16 +64,14 @@ class ERL(BoostedRuleLearner):
         m.addConstr(psi_p <= 1)
         m.addConstr(psi_p >= 0)
         m.addConstr(psi_n >= 0)
-        m.addConstr(A_p @ w + psi_p >= 1.0)
+        m.addConstr(A_p @ w >= psi_p)
         m.addConstr(A_n @ w == psi_n)
-        m.addConstr(t_p >= 1 / 300 * A_p @ w)
-        m.addConstr(t_n >= 1 / 300 * A_n @ w)
+        # m.addConstr(t_p >= A_p @ w)
+        # m.addConstr(t_n >= A_n @ w)
         m.update()
 
         m.setObjective(
-            one @ w +  # 0.00001 * ((E_p @ A_p @ w) + (E_n @ A_n @ w)),
-            E_p @ t_p + E_n @ t_n +
-            C * (D_p @ psi_p + D_n @ psi_n),
+            one @ w + C * (D_p @ psi_p + D_n @ psi_n),
             GRB.MINIMIZE
         )
 
@@ -87,7 +85,6 @@ class ERL(BoostedRuleLearner):
         w_out = []
 
         for i in range(self.percentiles * p):
-            print(self.LP.getVarByName('weights[0]'))
             w = int(self.LP.getVarByName('weights[{}]'.format(i)).x)
             if w > 0:
                 w_out.append(i)

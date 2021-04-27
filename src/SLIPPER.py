@@ -45,7 +45,7 @@ class SLIPPER(BoostedRuleLearner):
         else:
             return eq_rule
 
-    def __grow_rule(self, X, y, tol=0.01, con_tol=0.01):
+    def __grow_rule(self, X, y):
         """
         Starts with empty conjunction of conditions and
         greddily adds rules to mazimize Z_tilda_t
@@ -229,8 +229,6 @@ class SlipperRule(Rule):
         """
         V_plus, V_minus = self._get_design_matrices(X, y, D)
 
-        # TODO: This is really not safe to update C_R like this
-        # between two rules
         self.pobj = (1 - V_plus - V_minus) + V_plus * np.exp(-self.C_R) \
             + V_minus * np.exp(self.C_R)
 

@@ -106,8 +106,6 @@ def main():
                    'Salvage', 'TimeStep'], axis=1)
     y = data['Voucher']
 
-    print(X.columns.tolist()[1])
-    # features = X.columns
     index = y.index.to_list()
 
     X, y = X.to_numpy(), y.to_numpy()
