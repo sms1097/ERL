@@ -1,9 +1,10 @@
-# from src.SLIPPER import SLIPPER
+from src.SLIPPER import SLIPPER
 from src.ERL import ERL
 import numpy as np
 import pandas as pd
 
 from sklearn.model_selection import train_test_split
+from sklearn.datasets import make_classification, load_iris
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
 MANAGEMENT = 'Light'
@@ -96,12 +97,6 @@ def main():
     data, salvage, no_salvage = load_data_class(all_data, MANAGEMENT,
                                                 DISCOUNT)
 
-    # emissions = [salvage[DISCOUNT], no_salvage[DISCOUNT]]
-    # headers = ['salvage', 'no_salvage']
-    # optimal_df = pd.concat(emissions, axis=1, keys=headers)
-    # optimal_df['positive'] = optimal_df[['salvage', 'no_salvage']].min(axis=1)
-    # optimal_df['negative'] = optimal_df[['salvage', 'no_salvage']].max(axis=1)
-
     X = data.drop(['Voucher', 'Treatment', DISCOUNT, 'diff', 'SiteInd',
                    'Salvage', 'TimeStep'], axis=1)
     y = data['Voucher']
@@ -120,8 +115,9 @@ def main():
 
     E_p, E_n = E_p.to_numpy(), E_n.to_numpy()
 
-    clf = ERL()
-    clf.fit(X_train, y_train, E_p, E_n)
+    clf = SLIPPER()
+    # clf.fit(X_train, y_train, E_p, E_n)
+    clf.fit(X_train, y_train)
 
     preds = clf.predict(X_test)
 
@@ -147,6 +143,45 @@ def main():
 
     print('salvage strategy: {}'.format(np.mean(y_salvage)))
     print('no salvage strategy: {}'.format(np.mean(y_no_salvage)) + '\n')
+
+    for rule in clf.rules:
+        print(rule)
+
+
+def other_main():
+    X, y = load_iris(return_X_y=True)
+
+    false_idx = np.where((y == 0) | (y == 2))
+    y[false_idx] = 0
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=1
+    )
+
+    clf = ERL()
+    clf.fit(X_train, y_train, None, None)
+    preds = clf.predict(X_test)
+
+    print(accuracy_score(y_test, preds))
+
+    for rule in clf.rules:
+        print(rule)
+
+
+def synthetic_data():
+    X, y = make_classification(
+        n_samples=4000, n_features=20, n_informative=3
+    )
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=1
+    )
+
+    clf = ERL()
+    clf.fit(X_train, y_train, None, None)
+    preds = clf.predict(X_test)
+
+    print(accuracy_score(y_test, preds))
 
     for rule in clf.rules:
         print(rule)
