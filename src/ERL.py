@@ -20,7 +20,7 @@ class ERL(BoostedRuleLearner):
             pivots = np.percentile(X[:, feat], range(0, 100, self.percentiles),
                                    interpolation='midpoint')
             for pivot in pivots:
-                for operation in ['>=', '<=', '==']:
+                for operation in ['>', '<']:  # , '==']:
                     condition = Condition(feat, operation, pivot)
                     preds.append(condition.classify(X, return_idx=False))
                     self.conditions.append(condition)
@@ -50,7 +50,7 @@ class ERL(BoostedRuleLearner):
         # define model and other paramters
         m = gp.Model('rule-extraciton')
         w = m.addMVar(shape=measurement.shape[1], name="weights",
-                      vtype=GRB.CONTINUOUS)
+                      vtype=GRB.BINARY)
 
         # t_p = m.addMVar(shape=A_p.shape[0], name="t_p", vtype=GRB.BINARY)
         # t_n = m.addMVar(shape=A_n.shape[0], name="t_n", vtype=GRB.BINARY)
@@ -100,7 +100,7 @@ class ERL(BoostedRuleLearner):
         self.D /= np.exp((2 * y - 1) * y_hat)
         self.D /= np.sum(self.D)
 
-    def fit(self, X, y, emissions_positive, emissions_negative, T=5):
+    def fit(self, X, y, emissions_positive, emissions_negative, T=1):
         """
         Fit ERL model
         """

@@ -17,7 +17,7 @@ class SLIPPER(BoostedRuleLearner):
         else:
             self.feature_map = None
 
-    def __make_candidate(self, X, y, curr_rule, feat, A_c):
+    def __make_candidate(self, X, y, curr_rule, feat, A_c, E_p, E_n):
         """
         Make candidate rule based off new condition and
         existing rule
@@ -32,9 +32,9 @@ class SLIPPER(BoostedRuleLearner):
         lte_rule.add_condition(feat, '<=', A_c, self.feature_map)
         eq_rule.add_condition(feat, '==', A_c, self.feature_map)
 
-        gte_rule.grow_rule_obj(X, y, self.D)
-        lte_rule.grow_rule_obj(X, y, self.D)
-        eq_rule.grow_rule_obj(X, y, self.D)
+        gte_rule.grow_rule_obj(X, y, self.D, E_p, E_n)
+        lte_rule.grow_rule_obj(X, y, self.D, E_p, E_n)
+        eq_rule.grow_rule_obj(X, y, self.D, E_p, E_n)
 
         optimal = max(eq_rule.Z_tilda, gte_rule.Z_tilda, lte_rule.Z_tilda)
 
@@ -45,7 +45,7 @@ class SLIPPER(BoostedRuleLearner):
         else:
             return eq_rule
 
-    def __grow_rule(self, X, y):
+    def __grow_rule(self, X, y, E_p, E_n):
         """
         Starts with empty conjunction of conditions and
         greddily adds rules to mazimize Z_tilda_t
@@ -69,7 +69,7 @@ class SLIPPER(BoostedRuleLearner):
                                        interpolation='midpoint')
 
                 feature_candidates = [
-                    self.__make_candidate(X, y, curr_rule, feat, A_c)
+                    self.__make_candidate(X, y, curr_rule, feat, A_c, E_p, E_n)
                     for A_c in pivots
                 ]
 
@@ -91,7 +91,7 @@ class SLIPPER(BoostedRuleLearner):
 
         return curr_rule
 
-    def __prune_rule(self, X, y, rule):
+    def __prune_rule(self, X, y, rule, E_p, E_n):
         """
         Removes conditions from initial rule built on growth
         set minimizing objective formula
@@ -99,7 +99,7 @@ class SLIPPER(BoostedRuleLearner):
 
         stop_condition = False
         curr_rule = copy.deepcopy(rule)
-        curr_rule.prune_rule(X, y, self.D)
+        curr_rule.prune_rule(X, y, self.D, E_p, E_n)
 
         while not stop_condition:
             candidate_rules = []
@@ -109,7 +109,7 @@ class SLIPPER(BoostedRuleLearner):
 
             for condition in curr_rule.conditions:
                 R_prime = copy.deepcopy(curr_rule)
-                R_prime.prune_rule(X, y, self.D, condition)
+                R_prime.prune_rule(X, y, self.D, E_p, E_n, condition)
                 candidate_rules.append(R_prime)
 
             prune_objs = [x.pobj for x in candidate_rules]
@@ -146,12 +146,12 @@ class SLIPPER(BoostedRuleLearner):
 
         return default_rule
 
-    def add_rule_or_default(self, X, y, learned_rule):
+    def add_rule_or_default(self, X, y, E_p, E_n, learned_rule):
         """
         add rule or default
         """
         rules = [self.make_default_rule(X, y), learned_rule]
-        scores = [x.calc_eq_5(X, y, self.D) for x in rules]
+        scores = [x.calc_eq_5(X, y, self.D, E_p, E_n) for x in rules]
         self.rules.append(rules[scores.index(min(scores))])
 
     def update(self, X, y):
@@ -159,10 +159,9 @@ class SLIPPER(BoostedRuleLearner):
         Function to update distributions
         """
         self.D /= np.exp(y * self.rules[-1].C_R)
-
         self.D /= np.sum(self.D)
 
-    def fit(self, X, y, T=3):
+    def fit(self, X, y, E_p, E_n, T=5):
         """
         Main loop for training
         """
@@ -170,13 +169,16 @@ class SLIPPER(BoostedRuleLearner):
         self.D = np.array([1 / m for _ in range(m)])
 
         for _ in range(T):
-            X_grow, X_prune, y_grow, y_prune = \
-                train_test_split(X, y, test_size=0.33)
+            X_grow, X_prune, y_grow, y_prune, train_idx, test_idx = \
+                train_test_split(X, y, list(range(X.shape[0])), test_size=0.33)
 
-            rule_t = self.__grow_rule(X_grow, y_grow)
-            rule_t = self.__prune_rule(X_prune, y_prune, rule_t)
+            E_p_grow, E_n_grow = E_p[train_idx], E_n[train_idx]
+            E_p_prune, E_n_prune = E_p[test_idx], E_n[test_idx]
 
-            self.add_rule_or_default(X, y, rule_t)
+            rule_t = self.__grow_rule(X_grow, y_grow, E_p_grow, E_n_grow)
+            rule_t = self.__prune_rule(X_prune, y_prune, rule_t, E_p_prune, E_n_prune)
+
+            self.add_rule_or_default(X, y, E_p, E_n, rule_t)
 
             self.update(X, y)
 
@@ -201,7 +203,7 @@ class SlipperRule(Rule):
 
         return output
 
-    def prune_rule(self, X, y, D, condition=None):
+    def prune_rule(self, X, y, D, E_p, E_n, condition=None):
         """
         Convert rule to a pruned rule
         """
@@ -210,28 +212,28 @@ class SlipperRule(Rule):
 
         self.state = RuleState.PRUNE
 
-        self.prune_rule_obj(X, y, D)
+        self.prune_rule_obj(X, y, D, E_p, E_n)
 
-    def grow_rule_obj(self, X, y, D):
+    def grow_rule_obj(self, X, y, D, E_p=None, E_n=None):
         """
         Score equation (6) and get confidence
         from equation (4)
         """
-        W_plus, W_minus = self._get_design_matrices(X, y, D)
+        W_plus, W_minus = self._get_design_matrices(X, y, D, E_p, E_n)
 
         self.calc_C_R(W_plus, W_minus, D)
 
         self.Z_tilda = np.sqrt(W_plus) - np.sqrt(W_minus)
 
-    def prune_rule_obj(self, X, y, D):
+    def prune_rule_obj(self, X, y, D, E_p, E_n):
         """
         Objective function for prune rule routine
         """
-        V_plus, V_minus = self._get_design_matrices(X, y, D)
+        V_plus, V_minus = self._get_design_matrices(X, y, D, E_p, E_n)
 
         self.pobj = (1 - V_plus - V_minus) + V_plus * np.exp(-self.C_R) \
             + V_minus * np.exp(self.C_R)
 
-    def calc_eq_5(self, X, y, D):
-        W_plus, W_minus = self._get_design_matrices(X, y, D)
+    def calc_eq_5(self, X, y, D, E_p, E_n):
+        W_plus, W_minus = self._get_design_matrices(X, y, D, E_p, E_n)
         return 1 - np.square(np.sqrt(W_plus) - np.sqrt(W_minus))

@@ -63,7 +63,7 @@ class Rule:
 
         return output
 
-    def _get_design_matrices(self, X, y, D):
+    def _get_design_matrices(self, X, y, D, E_p=None, E_n=None):
         """
         Helper funtion to calculate Ws for grow rule
         and Vs for prune rule
@@ -73,7 +73,11 @@ class Rule:
         W_plus_idx = np.where((preds == 1) & (y == 1))
         W_minus_idx = np.where((preds == 1) & (y == 0))
 
-        return np.sum(D[W_plus_idx]), np.sum(D[W_minus_idx])
+        if E_p is not None and E_n is not None:
+            return np.sum(D[W_plus_idx] + np.abs(E_p[W_plus_idx])), \
+                np.sum(D[W_minus_idx] + np.abs(E_n[W_minus_idx]))
+        else:
+            return np.sum(D[W_plus_idx]), np.sum(D[W_minus_idx])
 
     def calc_C_R(self, plus, minus, D):
         self.C_R = 0.5 * np.log((plus + (1 / (2 * len(D)))) /

@@ -93,31 +93,41 @@ def get_strategy(data, target, management, discount):
 
 
 def main():
-    all_data = pd.read_csv('data.csv')
+    all_data = pd.read_csv('updata.csv')
     data, salvage, no_salvage = load_data_class(all_data, MANAGEMENT,
                                                 DISCOUNT)
 
+    dummies = pd.get_dummies(data['Treatment'])
+    data = data.merge(dummies, left_index=True, right_index=True)
+
     X = data.drop(['Voucher', 'Treatment', DISCOUNT, 'diff', 'SiteInd',
-                   'Salvage', 'TimeStep'], axis=1)
+                   'Salvage'], axis=1)
     y = data['Voucher']
 
     index = y.index.to_list()
 
     X, y = X.to_numpy(), y.to_numpy()
     X_train, X_test, y_train, y_test, _, test_index = train_test_split(
-        X, y, index, test_size=0.2, random_state=1)
+        X, y, index, test_size=0.1, random_state=3)
 
-    _, _, E_p, y_no_salvage = train_test_split(
-        X, salvage[DISCOUNT], test_size=0.2, random_state=1)
+    # _, _, E_p, y_no_salvage = train_test_split(
+    #     X, salvage[DISCOUNT], test_size=0.1, random_state=3)
 
-    _, _, E_n, y_salvage = train_test_split(
-        X, no_salvage[DISCOUNT], test_size=0.2, random_state=1)
+    # _, _, E_n, y_salvage = train_test_split(
+    #     X, no_salvage[DISCOUNT], test_size=0.1, random_state=3)
 
-    E_p, E_n = E_p.to_numpy(), E_n.to_numpy()
+    # E_p, E_n = E_p.to_numpy(), E_n.to_numpy()
 
+    # E_p = (E_p - np.mean(E_p)) / np.std(E_p)
+    # E_n = (E_n - np.mean(E_n)) / np.std(E_n)
+
+    # clf = SLIPPER()
+    print(X.shape)
+
+    # clf = ERL()
     clf = SLIPPER()
-    # clf.fit(X_train, y_train, E_p, E_n)
-    clf.fit(X_train, y_train)
+    clf.fit(X_train, y_train, None, None)  # , E_p, E_n)
+    # clf.fit(X_train, y_train)
 
     preds = clf.predict(X_test)
 
