@@ -22,6 +22,7 @@ class SLIPPER(BoostedRuleLearner):
         Make candidate rule based off new condition and
         existing rule
         """
+
         # TODO: smarter with list of conditions
         # Get indices to build W_plus and W_minus
         gte_rule = copy.deepcopy(curr_rule)
@@ -94,7 +95,7 @@ class SLIPPER(BoostedRuleLearner):
     def __prune_rule(self, X, y, rule):
         """
         Removes conditions from initial rule built on growth
-        set minimizing objective formula
+        set minimizing objective formula (eq 7)
         """
 
         stop_condition = False
